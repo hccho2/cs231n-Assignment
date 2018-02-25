@@ -1,9 +1,9 @@
 # cs231n-2017-Assignment
-### Assignment1
+### Assignment1 -  Done
 
-### Assignment2
+### Assignment2 -  Done
 
-### Assignment3
+### Assignment3 -  Ongoing
 
 
 # Tuning-Network(cs231n Assignment2에서)
