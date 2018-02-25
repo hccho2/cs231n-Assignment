@@ -75,7 +75,7 @@ def Network2(X,y,is_training):
     return y_out
 ```
 ### Network2에 대한 training 결과
-	* weight를 초기화: Epoch 5, Overall loss = 0.656 and accuracy of 0.769 (Val: accuracy of 0.708, Test: acc of 0.674)
+	* Epoch 5, Overall loss = 0.656 and accuracy of 0.769 (Val: accuracy of 0.708, Test: acc of 0.674)
  
  
 ### 1층 더 추가하여 Network3 구성
