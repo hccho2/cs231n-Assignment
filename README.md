@@ -110,7 +110,7 @@ def Network3(X,y,is_training):
     return y_out
 ``` 
  
-### Network3에 대한 training 결과
+### Network3(Drop Out)에 대한 training 결과
 	* Epoch 5, Overall loss = 0.601 and accuracy of 0.792 (Val: accuracy of 0.748, Test: acc of 0.741)
 	* Epoch 10, Overall loss = 0.601 and accuracy of 0.895 (Val: accuracy of 0.745, Test: acc of 0.741)
 	* Network2, Network3 모두 5epoch에 Validation Accuracy 70% 이상 달성.
