@@ -2,6 +2,7 @@
 ### Assignment1 -  Done
 
 ### Assignment2 -  Done
+참고: Assignment2의 과제 함수 중 일부는 Assignment3에 정답(?)이 있다.
 
 ### Assignment3 -  Ongoing
 
