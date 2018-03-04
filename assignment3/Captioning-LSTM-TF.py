@@ -25,6 +25,7 @@ def get_max_iteration_checkpoint(ckpt):
         if tmp > counter:
             max_index = i
     
+    print('loaded checkpoint: ', ckpt.all_model_checkpoint_paths[max_index])
     return ckpt.all_model_checkpoint_paths[max_index]
 
 def BLEU_score(gt_caption, sample_caption):
@@ -40,17 +41,18 @@ def BLEU_score(gt_caption, sample_caption):
     BLEUscore = nltk.translate.bleu_score.sentence_bleu([reference], hypothesis, weights = [1])
     return BLEUscore
 
-def evaluate_model(model):
+def evaluate_model_tf(sess,model,data,batch_size=1000):
     """
     model: CaptioningRNN model
     Prints unigram BLEU score averaged over 1000 training and val examples.
     """
+    BLEUscores ={}
     for split in ['train', 'val']:
-        minibatch = sample_coco_minibatch(med_data, split=split, batch_size=1000)
+        minibatch = sample_coco_minibatch(data, split=split, batch_size=batch_size)
         gt_captions, features, urls = minibatch
         gt_captions = decode_captions(gt_captions, data['idx_to_word'])
 
-        sample_captions = model.sample(features)
+        sample_captions = model.sample(sess,features)
         sample_captions = decode_captions(sample_captions, data['idx_to_word'])
 
         total_score = 0.0
@@ -96,18 +98,24 @@ class CaptioningRNN:
         self.build()
     def build(self):
         # features, captions: tf.placeholder
-             
+        
+        tuple_mode = True
 
         cells = []
         for _ in range(self.num_layers):
-            cell = tf.contrib.rnn.BasicLSTMCell(num_units=hidden_dim,state_is_tuple=False)
+            cell = tf.contrib.rnn.BasicLSTMCell(num_units=hidden_dim,state_is_tuple=tuple_mode)
             cells.append(cell)
         cell = tf.contrib.rnn.MultiRNNCell(cells)  
 
         inputs = tf.nn.embedding_lookup(self.params['embedding'], self.captions_in)  #batch_size x seq_length x wordvec_dim
         h0 = tf.matmul(self.features,self.params['Wp']) + self.params['bp'] # batch_size x hidden_dim
-        #initial_state =  cell.zero_state(batch_size, tf.float32) # batch_size x hidden_dim
-        self.initial_state = (tf.concat((tf.zeros_like(h0),h0), axis=1),)
+        
+
+        #initial_state =  cell.zero_state(batch_size, tf.float32) # (batch_size x hidden_dim) x layer 개수 
+        if tuple_mode:
+            self.initial_state=(tf.contrib.rnn.LSTMStateTuple(tf.zeros_like(h0), h0),) + (tf.contrib.rnn.LSTMStateTuple(tf.zeros_like(h0), tf.zeros_like(h0)),)*(self.num_layers-1)
+        else:
+            self.initial_state = (tf.concat((tf.zeros_like(h0),h0), axis=1),) + (tf.concat((tf.zeros_like(h0),tf.zeros_like(h0)), axis=1),) * (self.num_layers-1)
 
         
         helper = tf.contrib.seq2seq.TrainingHelper(inputs, np.array([self.seq_length]*self.batch_size,dtype=np.int32))
@@ -135,12 +143,12 @@ class CaptioningRNN:
     
         return captions
     
-max_train = 200000
+max_train = 2000
 batch_size = 512
-num_epoch = 5
+num_epoch = 1
 
 
-save_dir = ".\save"
+
 
     
     
@@ -151,86 +159,100 @@ word_to_idx=data['word_to_idx']
 input_dim=data['train_features'].shape[1]
 hidden_dim=512
 wordvec_dim=256
+num_layers=2
+ckpt_save_dir = ".\save" + str(num_layers)
 
+Mode = 0 # 1: train 2: test.  3: BLEU socre
 
-
-with tf.device('/cpu:0'):
-    sess = tf.Session()
-    
-    minibatch = sample_coco_minibatch(small_data, split='train', batch_size=batch_size)
-    captions, features, urls = minibatch
-    _,T = captions.shape
-    
-    model = CaptioningRNN(word_to_idx=data['word_to_idx'],input_dim=input_dim, 
-                          wordvec_dim=wordvec_dim,hidden_dim=hidden_dim,batch_size=batch_size,seq_length = T-1,num_layers=1)
-    
-    
-    train = tf.train.AdamOptimizer(0.001).minimize(model.loss)    
-
-    num_batch = int(max_train/batch_size)
-    loss_history=[]
-    sess.run(tf.global_variables_initializer())
-    saver = tf.train.Saver(tf.global_variables())
-    for i in range(num_epoch):
-        
-        for j in range(num_batch):
-            minibatch = sample_coco_minibatch(small_data, split='train', batch_size=batch_size)
-            captions, features, urls = minibatch            
-            feed = {model.features: features,model.captions_in: captions[:,:-1],model.captions_out: captions[:,1:]}
-            _, loss = sess.run([train,model.loss], feed_dict=feed)
-            loss_history.append(loss)
-            if j % 10 == 0:
-                print('(Iteration %d / %d) loss: %f' % (i*num_batch+j, num_epoch*num_batch, loss_history[-1]))
-
-
-    if not os.path.isdir(save_dir):
-        os.makedirs(save_dir)
-    
-    checkpoint_path = os.path.join(save_dir, 'model.ckpt')
-    saver.save(sess, checkpoint_path,global_step=num_epoch*max_train)
-    print("model saved to {}".format(checkpoint_path))    
-
-    sess.close()
-    
-
-    #################
-
-
-tf.reset_default_graph()
-batch_size=2
-sample_model = CaptioningRNN(word_to_idx=data['word_to_idx'],input_dim=input_dim, 
-                      wordvec_dim=wordvec_dim,hidden_dim=hidden_dim,batch_size=batch_size,seq_length = 1,num_layers=1)
-
-with tf.Session() as sess:
-    tf.global_variables_initializer().run()
-    saver = tf.train.Saver(tf.global_variables())
-    ckpt = tf.train.get_checkpoint_state(save_dir)
-    max_iteration_chekpoint = get_max_iteration_checkpoint(ckpt)
-    if ckpt and max_iteration_chekpoint:
-        saver.restore(sess, max_iteration_chekpoint)
-        
-        for split in ['train', 'val']:
-            minibatch = sample_coco_minibatch(small_data, split=split, batch_size=2)
-            gt_captions, features, urls = minibatch
-            gt_captions = decode_captions(gt_captions, data['idx_to_word'])
+if Mode==0: 
+    with tf.device('/cpu:0'):
+        sess = tf.Session()
          
-            sample_captions = sample_model.sample(sess,features)
-            sample_captions = decode_captions(sample_captions, data['idx_to_word'])
+        minibatch = sample_coco_minibatch(small_data, split='train', batch_size=batch_size)
+        captions, features, urls = minibatch
+        _,T = captions.shape
          
-            for gt_caption, sample_caption, url in zip(gt_captions, sample_captions, urls):
-                plt.imshow(image_from_url(url))
-                plt.title('%s\n%s\nGT:%s' % (split, sample_caption, gt_caption))
-                plt.axis('off')
-                plt.show()
-            print(split, sample_caption,"\n--->", gt_caption)          
+        model = CaptioningRNN(word_to_idx=data['word_to_idx'],input_dim=input_dim, 
+                              wordvec_dim=wordvec_dim,hidden_dim=hidden_dim,batch_size=batch_size,seq_length = T-1,num_layers=num_layers)
+         
+         
+        train = tf.train.AdamOptimizer(0.001).minimize(model.loss)    
+     
+        num_batch = int(max_train/batch_size)
+        loss_history=[]
+        sess.run(tf.global_variables_initializer())
+        saver = tf.train.Saver(tf.global_variables())
+        for i in range(num_epoch):
+             
+            for j in range(num_batch):
+                minibatch = sample_coco_minibatch(small_data, split='train', batch_size=batch_size)
+                captions, features, urls = minibatch            
+                feed = {model.features: features,model.captions_in: captions[:,:-1],model.captions_out: captions[:,1:]}
+                _, loss = sess.run([train,model.loss], feed_dict=feed)
+                loss_history.append(loss)
+                if j % 10 == 0:
+                    print('(Iteration %d / %d) loss: %f' % (i*num_batch+j, num_epoch*num_batch, loss_history[-1]))
+     
+     
+        if not os.path.isdir(save_dir):
+            os.makedirs(save_dir)
+         
+        checkpoint_path = os.path.join(ckpt_save_dir, 'model')
+        saver.save(sess, checkpoint_path,global_step=num_epoch*max_train)
+        print("model saved to {}".format(checkpoint_path))    
+     
+        sess.close()
+    
+elif Mode==1:
+    tf.reset_default_graph()
+    batch_size=2
+    sample_model = CaptioningRNN(word_to_idx=data['word_to_idx'],input_dim=input_dim, 
+                          wordvec_dim=wordvec_dim,hidden_dim=hidden_dim,batch_size=batch_size,seq_length = 1,num_layers=num_layers)
+     
+    with tf.Session() as sess:
+        tf.global_variables_initializer().run()
+        saver = tf.train.Saver(tf.global_variables())
+        ckpt = tf.train.get_checkpoint_state(save_dir)
+        max_iteration_chekpoint = get_max_iteration_checkpoint(ckpt)
+        if ckpt and max_iteration_chekpoint:
+            saver.restore(sess, max_iteration_chekpoint)
+             
+            for split in ['train', 'val']:
+                minibatch = sample_coco_minibatch(small_data, split=split, batch_size=2)
+                gt_captions, features, urls = minibatch
+                gt_captions = decode_captions(gt_captions, data['idx_to_word'])
+              
+                sample_captions = sample_model.sample(sess,features)
+                sample_captions = decode_captions(sample_captions, data['idx_to_word'])
+              
+                for gt_caption, sample_caption, url in zip(gt_captions, sample_captions, urls):
+                    plt.imshow(image_from_url(url))
+                    plt.title('%s\n%s\nGT:%s' % (split, sample_caption, gt_caption))
+                    plt.axis('off')
+                    plt.show()
+                print(split, sample_caption,"\n--->", gt_caption)          
+        sess.close()
+    
+else:    
+    tf.reset_default_graph()
+    with tf.Session() as sess:
+        batch_size=1000
+        sample_model = CaptioningRNN(word_to_idx=data['word_to_idx'],input_dim=input_dim, 
+                              wordvec_dim=wordvec_dim,hidden_dim=hidden_dim,batch_size=batch_size,seq_length = 1,num_layers=num_layers)      
         
-        
-
+        tf.global_variables_initializer().run()
+        saver = tf.train.Saver(tf.global_variables())
+        ckpt = tf.train.get_checkpoint_state(save_dir)
+        max_iteration_chekpoint = get_max_iteration_checkpoint(ckpt)
+        if ckpt and max_iteration_chekpoint:
+            saver.restore(sess, max_iteration_chekpoint)
+            evaluate_model_tf(sess,sample_model,data,batch_size)   
+        sess.close()
 
 ###########################################
 
 
-evaluate_model(small_lstm_model,small_data)   
+
 
 
 e = time.time()
