@@ -137,5 +137,8 @@ def Network3(X,y,is_training):
 	* hidden_dim=512, wordvec_dim=256, num_layers=1, train_size = 0.2M x epoch(30)
 		- Average BLEU score for train: 0.344124
 		- Average BLEU score for val:: 0.279812 
-	* epoch만 늘려서는 val BLEU가 좋아지지 않는다.
+	* epoch만 늘려서는 val BLEU가 좋아지지 않는다. num_layer=2로 변경
+	* hidden_dim=512, wordvec_dim=256, num_layers=2, train_size = 0.2M x epoch(30)
+		- Average BLEU score for train: 0.354971
+		- Average BLEU score for val: 0.280609 	
 
