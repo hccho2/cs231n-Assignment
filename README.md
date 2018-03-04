@@ -131,10 +131,11 @@ def Network3(X,y,is_training):
  - 목표: Validation에서 BLEU score 0.3 이상
  
 ### 실행결과
-	* hidden_dim=512, wordvec_dim=256, num_layers=2, train_size = 0.2M x epoch(5) 
+	* hidden_dim=512, wordvec_dim=256, num_layers=1, train_size = 0.2M x epoch(5) 
 		- Average BLEU score for train: 0.28
 		- Average BLEU score for val:: 0.27
-	* hidden_dim=512, wordvec_dim=256, num_layers=2, train_size = 0.2M x epoch(30)
+	* hidden_dim=512, wordvec_dim=256, num_layers=1, train_size = 0.2M x epoch(30)
 		- Average BLEU score for train: 0.344124
 		- Average BLEU score for val:: 0.279812 
+	* epoch만 늘려서는 val BLEU가 좋아지지 않는다.
 
