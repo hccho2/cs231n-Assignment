@@ -99,11 +99,11 @@ class CaptioningRNN:
     def build(self):
         # features, captions: tf.placeholder
         
-        tuple_mode = True
+        self.tuple_mode = True
 
         cells = []
         for _ in range(self.num_layers):
-            cell = tf.contrib.rnn.BasicLSTMCell(num_units=hidden_dim,state_is_tuple=tuple_mode)
+            cell = tf.contrib.rnn.BasicLSTMCell(num_units=hidden_dim,state_is_tuple=self.tuple_mode)
             cells.append(cell)
         cell = tf.contrib.rnn.MultiRNNCell(cells)  
 
@@ -112,7 +112,7 @@ class CaptioningRNN:
         
 
         #initial_state =  cell.zero_state(batch_size, tf.float32) # (batch_size x hidden_dim) x layer 개수 
-        if tuple_mode:
+        if self.tuple_mode:
             self.initial_state=(tf.contrib.rnn.LSTMStateTuple(tf.zeros_like(h0), h0),) + (tf.contrib.rnn.LSTMStateTuple(tf.zeros_like(h0), tf.zeros_like(h0)),)*(self.num_layers-1)
         else:
             self.initial_state = (tf.concat((tf.zeros_like(h0),h0), axis=1),) + (tf.concat((tf.zeros_like(h0),tf.zeros_like(h0)), axis=1),) * (self.num_layers-1)
@@ -134,7 +134,12 @@ class CaptioningRNN:
         caption_in[:,0] = self._start        
          
         h0 = tf.matmul(features,self.params['Wp']) + self.params['bp']
-        state = sess.run((tf.concat((tf.zeros_like(h0),h0), axis=1),))
+        
+        if self.tuple_mode:
+            state=sess.run((tf.contrib.rnn.LSTMStateTuple(tf.zeros_like(h0), h0),) + (tf.contrib.rnn.LSTMStateTuple(tf.zeros_like(h0), tf.zeros_like(h0)),)*(self.num_layers-1))
+        else:
+            state = sess.run((tf.concat((tf.zeros_like(h0),h0), axis=1),) + (tf.concat((tf.zeros_like(h0),tf.zeros_like(h0)), axis=1),) * (self.num_layers-1))
+        
         for i in range(max_length):
             feed =  {self.captions_in: caption_in,self.initial_state:state}
             out, state = sess.run([self.outputs.rnn_output,self.last_state], feed_dict = feed)
@@ -143,7 +148,7 @@ class CaptioningRNN:
     
         return captions
     
-max_train = 2000
+max_train = 200000
 batch_size = 512
 num_epoch = 1
 
@@ -160,9 +165,15 @@ input_dim=data['train_features'].shape[1]
 hidden_dim=512
 wordvec_dim=256
 num_layers=2
-ckpt_save_dir = ".\save" + str(num_layers)
+if num_layers == 1:
+    ckpt_save_dir = ".\save-sigle-layer"    
+elif num_layers ==2:
+    ckpt_save_dir = ".\save-double-layer"    
+else:
+    print('check num_layers')
+    exit()
 
-Mode = 0 # 1: train 2: test.  3: BLEU socre
+Mode = 2 # 1: train 2: test.  3: BLEU socre
 
 if Mode==0: 
     with tf.device('/cpu:0'):
@@ -194,8 +205,8 @@ if Mode==0:
                     print('(Iteration %d / %d) loss: %f' % (i*num_batch+j, num_epoch*num_batch, loss_history[-1]))
      
      
-        if not os.path.isdir(save_dir):
-            os.makedirs(save_dir)
+        if not os.path.isdir(ckpt_save_dir):
+            os.makedirs(ckpt_save_dir)
          
         checkpoint_path = os.path.join(ckpt_save_dir, 'model')
         saver.save(sess, checkpoint_path,global_step=num_epoch*max_train)
@@ -212,7 +223,7 @@ elif Mode==1:
     with tf.Session() as sess:
         tf.global_variables_initializer().run()
         saver = tf.train.Saver(tf.global_variables())
-        ckpt = tf.train.get_checkpoint_state(save_dir)
+        ckpt = tf.train.get_checkpoint_state(ckpt_save_dir)
         max_iteration_chekpoint = get_max_iteration_checkpoint(ckpt)
         if ckpt and max_iteration_chekpoint:
             saver.restore(sess, max_iteration_chekpoint)
@@ -242,7 +253,7 @@ else:
         
         tf.global_variables_initializer().run()
         saver = tf.train.Saver(tf.global_variables())
-        ckpt = tf.train.get_checkpoint_state(save_dir)
+        ckpt = tf.train.get_checkpoint_state(ckpt_save_dir)
         max_iteration_chekpoint = get_max_iteration_checkpoint(ckpt)
         if ckpt and max_iteration_chekpoint:
             saver.restore(sess, max_iteration_chekpoint)
