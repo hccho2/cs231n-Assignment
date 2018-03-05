@@ -127,7 +127,7 @@ def Network3(X,y,is_training):
  
 -----------------------------------------------------------
 -----------------------------------------------------------
-# Captioning RNN(cs231n Assignment2에서)
+# Captioning RNN(cs231n Assignment3에서)
  - 목표: Validation에서 BLEU score 0.3 이상
  
 ### 실행결과
