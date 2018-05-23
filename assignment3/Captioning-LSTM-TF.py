@@ -275,6 +275,8 @@ else:
             graph = tf.get_default_graph()
             
             loss = graph.get_tensor_by_name('sequence_loss/truediv:0')
+            
+            # feed dict를 위해 placeholder만 뽑아 보자.
             ci = graph.get_tensor_by_name('caption_in:0')
             c0 = graph.get_tensor_by_name('caption_out:0')
             f = graph.get_tensor_by_name('features:0')
