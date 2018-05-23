@@ -174,7 +174,7 @@ else:
     print('check num_layers')
     exit()
 
-Mode = 3 # 0: train 1: test.  2: BLEU socre
+Mode = 3 # 0: train 1: test.  2: BLEU socre, 3: meta file test
 
 if Mode==0: 
     with tf.device('/cpu:0'):
@@ -261,20 +261,34 @@ elif Mode==2:
             evaluate_model_tf(sess,sample_model,data,batch_size)   
         sess.close()
 else:
+    # meta file로 부터 graph를 복원하여 계산.
     tf.reset_default_graph()
     
     with tf.Session() as sess:
-        
+
         ckpt = tf.train.get_checkpoint_state(ckpt_save_dir)
         max_iteration_chekpoint = get_max_iteration_checkpoint(ckpt)
         if ckpt and max_iteration_chekpoint:
             saver = tf.train.import_meta_graph(max_iteration_chekpoint+'.meta')
             saver.restore(sess,max_iteration_chekpoint)
         
-            graph = tf.get_default_graph().as_graph_def()
+            graph = tf.get_default_graph()
             
-            for node in graph.node:
-                print(node.name)
+            loss = graph.get_tensor_by_name('sequence_loss/truediv:0')
+            ci = graph.get_tensor_by_name('caption_in:0')
+            c0 = graph.get_tensor_by_name('caption_out:0')
+            f = graph.get_tensor_by_name('features:0')
+            batch_size = ci.get_shape().as_list()[0]
+            
+            minibatch = sample_coco_minibatch(small_data, split='val', batch_size=batch_size)
+            captions, features, urls = minibatch            
+            
+            l=sess.run(loss,feed_dict={f:features,ci:captions[:,:-1],c0:captions[:,1:]})
+            print('loss: {:.6f}'.format(l))
+            graph_def = graph.as_graph_def()
+            
+            #for node in graph_def.node:
+                #print(node.name)
 
         
 
