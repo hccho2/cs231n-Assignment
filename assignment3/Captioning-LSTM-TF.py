@@ -112,6 +112,7 @@ class CaptioningRNN:
         
 
         #initial_state =  cell.zero_state(batch_size, tf.float32) # (batch_size x hidden_dim) x layer 개수 
+        # LSTMStateTuple (c,h), h부분을 given 값인 h0로 초기화
         if self.tuple_mode:
             self.initial_state=(tf.contrib.rnn.LSTMStateTuple(tf.zeros_like(h0), h0),) + (tf.contrib.rnn.LSTMStateTuple(tf.zeros_like(h0), tf.zeros_like(h0)),)*(self.num_layers-1)
         else:
@@ -163,7 +164,7 @@ small_data = load_coco_data(max_train=max_train)
 word_to_idx=data['word_to_idx']
 input_dim=data['train_features'].shape[1]
 hidden_dim=512
-wordvec_dim=256
+wordvec_dim=512
 num_layers=2
 if num_layers == 1:
     ckpt_save_dir = ".\save-sigle-layer"    
@@ -173,7 +174,7 @@ else:
     print('check num_layers')
     exit()
 
-Mode = 2 # 1: train 2: test.  3: BLEU socre
+Mode = 3 # 0: train 1: test.  2: BLEU socre
 
 if Mode==0: 
     with tf.device('/cpu:0'):
@@ -221,7 +222,7 @@ elif Mode==1:
                           wordvec_dim=wordvec_dim,hidden_dim=hidden_dim,batch_size=batch_size,seq_length = 1,num_layers=num_layers)
      
     with tf.Session() as sess:
-        tf.global_variables_initializer().run()
+        #tf.global_variables_initializer().run()
         saver = tf.train.Saver(tf.global_variables())
         ckpt = tf.train.get_checkpoint_state(ckpt_save_dir)
         max_iteration_chekpoint = get_max_iteration_checkpoint(ckpt)
@@ -244,14 +245,14 @@ elif Mode==1:
                 print(split, sample_caption,"\n--->", gt_caption)          
         sess.close()
     
-else:    
+elif Mode==2:  
     tf.reset_default_graph()
     with tf.Session() as sess:
         batch_size=1000
         sample_model = CaptioningRNN(word_to_idx=data['word_to_idx'],input_dim=input_dim, 
                               wordvec_dim=wordvec_dim,hidden_dim=hidden_dim,batch_size=batch_size,seq_length = 1,num_layers=num_layers)      
         
-        tf.global_variables_initializer().run()
+        #tf.global_variables_initializer().run()
         saver = tf.train.Saver(tf.global_variables())
         ckpt = tf.train.get_checkpoint_state(ckpt_save_dir)
         max_iteration_chekpoint = get_max_iteration_checkpoint(ckpt)
@@ -259,7 +260,26 @@ else:
             saver.restore(sess, max_iteration_chekpoint)
             evaluate_model_tf(sess,sample_model,data,batch_size)   
         sess.close()
+else:
+    tf.reset_default_graph()
+    
+    with tf.Session() as sess:
+        
+        ckpt = tf.train.get_checkpoint_state(ckpt_save_dir)
+        max_iteration_chekpoint = get_max_iteration_checkpoint(ckpt)
+        if ckpt and max_iteration_chekpoint:
+            saver = tf.train.import_meta_graph(max_iteration_chekpoint+'.meta')
+            saver.restore(sess,max_iteration_chekpoint)
+        
+            graph = tf.get_default_graph().as_graph_def()
+            
+            for node in graph.node:
+                print(node.name)
 
+        
+
+
+    
 ###########################################
 
 
